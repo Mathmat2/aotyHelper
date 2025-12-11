@@ -18,14 +18,14 @@ export default function TopsterGrid({ albums, limit }: TopsterGridProps) {
     const columns = isSquare ? sqrt : (limit <= 5 ? limit : 5);
 
     return (
-        <div className="flex-1 p-8 overflow-y-auto h-full bg-neutral-900 flex flex-col items-center justify-center">
+        <div className="flex-1 p-8 overflow-y-auto h-full bg-background flex flex-col items-center justify-center">
             <h2 className="text-2xl font-bold mb-4">My Top Albums</h2>
             {/* Grid Container */}
             <div className="bg-transparent p-0 rounded-none shadow-none border-none w-fit h-fit">
                 {/* Outer container is just the grid now, no single Droppable */}
                 <div
                     className={`
-                        grid gap-0 border-[4px] border-[#1d1d1d] bg-[#1d1d1d]
+                        grid gap-0 border-[4px] border-border bg-muted
                     `}
                     style={{
                         gridTemplateColumns: `repeat(${columns}, minmax(200px, 1fr))`
@@ -41,8 +41,8 @@ export default function TopsterGrid({ albums, limit }: TopsterGridProps) {
                                         ref={provided.innerRef}
                                         {...provided.droppableProps}
                                         className={`
-                                            w-full aspect-square border border-[#2a2a2a] relative flex items-center justify-center
-                                            ${snapshot.isDraggingOver ? "bg-[#333]" : "bg-[#1d1d1d]"}
+                                            w-full aspect-square border border-border relative flex items-center justify-center
+                                            ${snapshot.isDraggingOver ? "bg-accent" : "bg-card"}
                                         `}
                                     >
                                         {album ? (
@@ -69,7 +69,7 @@ export default function TopsterGrid({ albums, limit }: TopsterGridProps) {
                                             </Draggable>
                                         ) : (
                                             // Empty Slot Placeholder
-                                            <span className="text-[#333] text-xl font-bold select-none pointer-events-none group-hover:text-[#444] transition-colors">
+                                            <span className="text-muted-foreground text-xl font-bold select-none pointer-events-none group-hover:text-foreground transition-colors">
                                                 {index + 1}
                                             </span>
                                         )}

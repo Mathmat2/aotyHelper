@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/form"
 import { useRouter } from 'next/navigation'
 import Image from "next/image"
+import { ModeToggle } from "@/components/mode-toggle"
 
 const FormSchema = z.object({
   username: z.string().min(2, {
@@ -45,12 +46,15 @@ export default function Home() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4 relative">
+      <div className="absolute top-4 right-4">
+        <ModeToggle />
+      </div>
       <main className="w-full max-w-md space-y-8">
         <div className="flex flex-col items-center justify-center space-y-2 text-center">
           <div className="mb-8">
             <Image
-              src="/logo.png"
+              src="/aoty-logo.png"
               alt="Album of the Year Logo"
               width={200}
               height={200}

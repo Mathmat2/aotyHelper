@@ -1,5 +1,6 @@
 import { Droppable } from "@hello-pangea/dnd";
 import DraggableAlbumCard from "./DraggableAlbumCard";
+import { ModeToggle } from "./mode-toggle";
 import { LastfmUserTopAlbum } from "@musicorum/lastfm/dist/types/packages/user";
 
 interface AlbumListProps {
@@ -9,9 +10,12 @@ interface AlbumListProps {
 export default function AlbumList({ albums }: AlbumListProps) {
     return (
         <div className="w-[300px] border-l border-border h-[calc(100vh-40px)] flex flex-col bg-background">
-            <div className="p-4 border-b border-border">
-                <h2 className="font-semibold">Available Albums</h2>
-                <p className="text-xs text-muted-foreground">Drag to the grid</p>
+            <div className="p-4 border-b border-border flex justify-between items-center">
+                <div>
+                    <h2 className="font-semibold">Available Albums</h2>
+                    <p className="text-xs text-muted-foreground">Drag to the grid</p>
+                </div>
+                <ModeToggle />
             </div>
             <Droppable droppableId="album-list">
                 {/* isDropDisabled=true because we don't want to drop things back into the list, 
