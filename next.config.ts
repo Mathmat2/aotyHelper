@@ -1,7 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-   webpack: (config) => {
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'lastfm.freetls.fastly.net',
+      },
+    ],
+  },
+  webpack: (config) => {
     config.externals.push({
       'node:crypto': 'commonjs crypto',
     });
