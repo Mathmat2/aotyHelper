@@ -2,6 +2,7 @@
 import { useDroppable } from "@dnd-kit/core";
 import DraggableAlbumCard from "./DraggableAlbumCard";
 import { LastfmUserTopAlbum } from "@musicorum/lastfm/dist/types/packages/user";
+import { ModeToggle } from "./mode-toggle";
 
 interface AlbumListProps {
     albums: LastfmUserTopAlbum[];
@@ -14,9 +15,12 @@ export default function AlbumList({ albums }: AlbumListProps) {
 
     return (
         <div className="w-[300px] border-l border-border h-[calc(100vh-40px)] flex flex-col bg-background">
-            <div className="p-4 border-b border-border">
-                <h2 className="font-semibold">Available Albums</h2>
-                <p className="text-xs text-muted-foreground">Drag to the grid</p>
+            <div className="p-4 border-b border-border flex items-center justify-between">
+                <div>
+                    <h2 className="font-semibold">Available Albums</h2>
+                    <p className="text-xs text-muted-foreground">Drag to the grid</p>
+                </div>
+                <ModeToggle />
             </div>
             <div
                 ref={setNodeRef}
