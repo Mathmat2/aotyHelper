@@ -1,121 +1,154 @@
-'use client'
+"use client";
 
-import { useState } from 'react';
-import { DragDropContext, DropResult } from '@hello-pangea/dnd';
-import { LastfmUserTopAlbum } from '@musicorum/lastfm/dist/types/packages/user';
-import AlbumList from '@/components/AlbumList';
-import TopsterGrid from '@/components/TopsterGrid';
+import { useState } from "react";
+import { LastfmUserTopAlbum } from "@musicorum/lastfm/dist/types/packages/user";
+import TopsterGrid from "@/components/TopsterGrid";
+import AlbumList from "@/components/AlbumList";
+import {
+    DndContext,
+    DragOverlay,
+    useSensor,
+    useSensors,
+    MouseSensor,
+    TouchSensor,
+    DragStartEvent,
+    DragEndEvent,
+} from "@dnd-kit/core";
+import DraggableAlbumCard from "@/components/DraggableAlbumCard";
 
 interface AlbumsClientPageProps {
     initialAlbums: LastfmUserTopAlbum[];
-    limit: number;
+    limit?: number;
 }
 
-export default function AlbumsClientPage({ initialAlbums, limit }: AlbumsClientPageProps) {
-    // State for the "Available" list (initially all albums)
-    const [availableAlbums, setAvailableAlbums] = useState<LastfmUserTopAlbum[]>(initialAlbums);
-
-    // State for the "Topster" grid (initially empty slots)
-    // We fill with nulls to represent empty slots
+export default function AlbumsClientPage({ initialAlbums, limit = 42 }: AlbumsClientPageProps) {
+    // Grid state: Sparse array of albums or nulls
     const [gridAlbums, setGridAlbums] = useState<(LastfmUserTopAlbum | null)[]>(
         Array(limit).fill(null)
     );
+    const [availableAlbums, setAvailableAlbums] = useState<LastfmUserTopAlbum[]>(initialAlbums);
+    const [activeAlbum, setActiveAlbum] = useState<LastfmUserTopAlbum | null>(null);
 
-    const onDragEnd = (result: DropResult) => {
-        const { source, destination } = result;
+    const sensors = useSensors(
+        useSensor(MouseSensor, {
+            activationConstraint: {
+                distance: 10, // Avoid accidental drags
+            },
+        }),
+        useSensor(TouchSensor, {
+            activationConstraint: {
+                delay: 250,
+                tolerance: 5,
+            },
+        })
+    );
 
-        // Dropped outside
-        if (!destination) return;
-
-        // Dropped in same place
-        if (source.droppableId === destination.droppableId && source.index === destination.index) return;
-
-        const sourceId = source.droppableId;
-        const destId = destination.droppableId;
-
-        // HELPER: Extract slot index from "topster-slot-X"
-        const getSlotIndex = (id: string) => parseInt(id.replace('topster-slot-', ''));
-
-        // --- 1. LIST -> SLOT ---
-        if (sourceId === 'album-list' && destId.startsWith('topster-slot-')) {
-            const slotIndex = getSlotIndex(destId);
-            const sourceList = Array.from(availableAlbums);
-            const gridList = Array.from(gridAlbums);
-
-            // Get the album being moved
-            const [movedAlbum] = sourceList.splice(source.index, 1);
-
-            // Check target slot
-            const existingAlbumInSlot = gridList[slotIndex];
-
-            // Place new album in slot
-            gridList[slotIndex] = movedAlbum;
-
-            // If slot was occupied, move the old one back to the list (at top? or end? let's do top/index 0)
-            if (existingAlbumInSlot) {
-                sourceList.unshift(existingAlbumInSlot);
-            }
-
-            setAvailableAlbums(sourceList);
-            setGridAlbums(gridList);
-        }
-
-        // --- 2. SLOT -> SLOT (Swap or Move) ---
-        else if (sourceId.startsWith('topster-slot-') && destId.startsWith('topster-slot-')) {
-            const sourceIndex = getSlotIndex(sourceId);
-            const destIndex = getSlotIndex(destId);
-
-            const gridList = Array.from(gridAlbums);
-
-            // Swap logic
-            const sourceItem = gridList[sourceIndex];
-            const destItem = gridList[destIndex];
-
-            gridList[destIndex] = sourceItem;
-            gridList[sourceIndex] = destItem;
-
-            setGridAlbums(gridList);
-        }
-
-        // --- 3. SLOT -> LIST (Remove) ---
-        else if (sourceId.startsWith('topster-slot-') && destId === 'album-list') {
-            const slotIndex = getSlotIndex(sourceId);
-            const gridList = Array.from(gridAlbums);
-            const sourceList = Array.from(availableAlbums);
-
-            const itemToRemove = gridList[slotIndex];
-            if (!itemToRemove) return; // Should not happen
-
-            // Clear slot
-            gridList[slotIndex] = null;
-
-            // Add to list
-            sourceList.splice(destination.index, 0, itemToRemove);
-
-            setGridAlbums(gridList);
-            setAvailableAlbums(sourceList);
-        }
-
-        // --- 4. LIST -> LIST (Reorder) ---
-        else if (sourceId === 'album-list' && destId === 'album-list') {
-            const items = Array.from(availableAlbums);
-            const [reorderedItem] = items.splice(source.index, 1);
-            items.splice(destination.index, 0, reorderedItem);
-            setAvailableAlbums(items);
+    const handleDragStart = (event: DragStartEvent) => {
+        const { active } = event;
+        // Retrieve album data stored in useDraggable
+        if (active.data.current && active.data.current.album) {
+            setActiveAlbum(active.data.current.album as LastfmUserTopAlbum);
         }
     };
 
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        setActiveAlbum(null);
+
+        if (!over) return;
+
+        const activeData = active.data.current;
+        // const overData = over.data.current; // Not strictly needed if we parse IDs
+
+        // Source info
+        const sourceSource = activeData?.source; // 'list' or 'grid'
+        const sourceIndex = activeData?.index; // index in list or grid
+
+        // Destination info
+        const destId = over.id as string;
+
+        // 1. Drop on Grid Slot
+        if (destId.startsWith("topster-slot-")) {
+            const destIndex = parseInt(destId.replace("topster-slot-", ""), 10);
+            const draggedAlbum = activeData?.album as LastfmUserTopAlbum;
+
+            if (!draggedAlbum) return;
+
+            setGridAlbums((prev) => {
+                const newGrid = [...prev];
+                const existingInSlot = newGrid[destIndex];
+
+                if (sourceSource === 'list') {
+                    // List -> Grid
+                    newGrid[destIndex] = draggedAlbum;
+                } else if (sourceSource === 'grid' && typeof sourceIndex === 'number') {
+                    // Grid -> Grid
+                    if (existingInSlot) {
+                        // Swap
+                        newGrid[sourceIndex] = existingInSlot;
+                        newGrid[destIndex] = draggedAlbum;
+                    } else {
+                        // Move to empty
+                        newGrid[sourceIndex] = null;
+                        newGrid[destIndex] = draggedAlbum;
+                    }
+                }
+                return newGrid;
+            });
+        }
+        // 2. Drop on Album List (Remove from Grid)
+        else if (destId === 'album-list') {
+            if (sourceSource === 'grid' && typeof sourceIndex === 'number') {
+                setGridAlbums((prev) => {
+                    const newGrid = [...prev];
+                    newGrid[sourceIndex] = null;
+                    return newGrid;
+                });
+            }
+
+        }
+    };
+
+    // Derived state: Filter out albums that are already in the grid
+    const filteredAvailableAlbums = availableAlbums.filter((album) => {
+        return !gridAlbums.some((gridAlbum) =>
+            gridAlbum &&
+            gridAlbum.name === album.name &&
+            gridAlbum.artist.name === album.artist.name
+        );
+    });
+
     return (
         <div className="flex h-screen overflow-hidden">
-            <DragDropContext onDragEnd={onDragEnd}>
+            <DndContext
+                sensors={sensors}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+            >
                 {/* Left Side: Topster Grid */}
-                <div className="flex flex-col flex-1 items-center p-8 bg-secondary/20 h-full overflow-y-auto">
-                    <TopsterGrid albums={gridAlbums} limit={limit} />
+                <div className="flex-1 bg-secondary/20 h-full overflow-y-auto block">
+                    <div className="w-full min-h-full p-8 flex flex-col items-center justify-center">
+                        <TopsterGrid albums={gridAlbums} limit={limit} />
+                    </div>
                 </div>
 
-                {/* Right Side: Scrollable List */}
-                <AlbumList albums={availableAlbums} />
-            </DragDropContext>
+                {/* Right Side: Scrollable List (Filtered) */}
+                <AlbumList albums={filteredAvailableAlbums} />
+
+                {/* Drag Overlay (Portal) */}
+                <DragOverlay zIndex={9999} dropAnimation={null}>
+                    {activeAlbum ? (
+                        <div style={{ width: 200, height: 200, cursor: 'grabbing' }}>
+                            <DraggableAlbumCard
+                                album={activeAlbum}
+                                index={0}
+                                coverOnly={true}
+                                id="overlay-item"
+                            />
+                        </div>
+                    ) : null}
+                </DragOverlay>
+            </DndContext>
         </div>
     );
 }

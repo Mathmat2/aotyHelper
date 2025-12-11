@@ -1,88 +1,67 @@
-import { Droppable, Draggable } from "@hello-pangea/dnd";
+
+import { useDroppable } from "@dnd-kit/core";
 import { LastfmUserTopAlbum } from "@musicorum/lastfm/dist/types/packages/user";
+import DraggableAlbumCard from "./DraggableAlbumCard";
 
 interface TopsterGridProps {
-    albums: (LastfmUserTopAlbum | null)[]; // Array representing grid slots
+    albums: (LastfmUserTopAlbum | null)[];
     limit: number;
 }
 
-import DraggableAlbumCard from "./DraggableAlbumCard";
+// Inner component for individual slot to use hook properly
+function GridSlot({ index, album }: { index: number; album: LastfmUserTopAlbum | null }) {
+    const { setNodeRef, isOver } = useDroppable({
+        id: `topster-slot-${index}`,
+        data: { index, type: 'slot' }
+    });
+
+    return (
+        <div
+            ref={setNodeRef}
+            className={`
+                w-full aspect-square border border-border relative flex items-center justify-center
+                ${isOver ? "bg-accent/50" : "bg-card"}
+            `}
+        >
+            {album ? (
+                <DraggableAlbumCard
+                    album={album}
+                    index={index}
+                    coverOnly={true}
+                    id={`grid-${index}`}
+                />
+            ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                    <span className="text-muted-foreground text-xl font-bold select-none pointer-events-none">
+                        {index + 1}
+                    </span>
+                </div>
+            )}
+        </div>
+    );
+}
 
 export default function TopsterGrid({ albums, limit }: TopsterGridProps) {
-
-    // Calculate columns: if limit is a perfect square, use sqrt. Otherwise default to 5 (or limit if < 5)
-    // Examples: 9 -> 3 cols. 10 -> 5 cols. 16 -> 4 cols. 25 -> 5 cols. 42 -> 5 cols. 100 -> 10 cols.
+    // Calculate columns
     const sqrt = Math.sqrt(limit);
     const isSquare = Number.isInteger(sqrt);
-    // Ensure 3x3 for limit 9, etc.
     const columns = isSquare ? sqrt : (limit <= 5 ? limit : 5);
 
     return (
-        <div className="flex-1 p-8 overflow-y-auto h-full bg-background flex flex-col items-center justify-center">
-            <h2 className="text-2xl font-bold mb-4">My Top Albums</h2>
-            {/* Grid Container */}
-            <div className="bg-transparent p-0 rounded-none shadow-none border-none w-fit h-fit">
-                {/* Outer container is just the grid now, no single Droppable */}
-                <div
-                    className={`
-                        grid gap-0 border-[4px] border-border bg-muted
-                    `}
-                    style={{
-                        gridTemplateColumns: `repeat(${columns}, minmax(200px, 1fr))`
-                    }}
-                >
-                    {Array.from({ length: limit }).map((_, index) => {
-                        const album = albums[index];
-                        // Each slot is a valid drop target
-                        return (
-                            <Droppable key={index} droppableId={`topster-slot-${index}`} isDropDisabled={false}>
-                                {(provided, snapshot) => (
-                                    <div
-                                        ref={provided.innerRef}
-                                        {...provided.droppableProps}
-                                        className={`
-                                            w-full aspect-square border border-border relative flex items-center justify-center
-                                            ${snapshot.isDraggingOver ? "bg-accent" : "bg-card"}
-                                        `}
-                                    >
-                                        {album ? (
-                                            <Draggable
-                                                key={`${album.name}-${album.artist.name}`}
-                                                draggableId={`${album.name}-${album.artist.name}`}
-                                                index={0} // Index is always 0 in a single-slot droppable
-                                            >
-                                                {(provided) => (
-                                                    <div
-                                                        ref={provided.innerRef}
-                                                        {...provided.draggableProps}
-                                                        {...provided.dragHandleProps}
-                                                        className="w-full h-full"
-                                                        style={{ ...provided.draggableProps.style }}
-                                                    >
-                                                        <DraggableAlbumCard
-                                                            album={album}
-                                                            index={index} // Visual index only (for rank badge)
-                                                            coverOnly={true}
-                                                        />
-                                                    </div>
-                                                )}
-                                            </Draggable>
-                                        ) : (
-                                            // Empty Slot Placeholder
-                                            <span className="text-muted-foreground text-xl font-bold select-none pointer-events-none group-hover:text-foreground transition-colors">
-                                                {index + 1}
-                                            </span>
-                                        )}
-                                        {/* Placeholder for the item being dragged over */}
-                                        <div className="hidden">
-                                            {provided.placeholder}
-                                        </div>
-                                    </div>
-                                )}
-                            </Droppable>
-                        );
-                    })}
-                </div>
+        <div className="bg-transparent p-0 rounded-none shadow-none border-none w-fit h-fit">
+            <div
+                className="grid gap-0 border-[4px] border-border bg-muted"
+                style={{
+                    gridTemplateColumns: `repeat(${columns}, minmax(200px, 1fr))`
+                }}
+            >
+                {Array.from({ length: limit }).map((_, index) => (
+                    <GridSlot
+                        key={index}
+                        index={index}
+                        album={albums[index]}
+                    />
+                ))}
             </div>
         </div>
     );
