@@ -22,6 +22,8 @@ import {
     SelectTrigger,
     SelectValue
 } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { useTheme } from "next-themes";
 
 interface AlbumsClientPageProps {
     initialAlbums: LastfmUserTopAlbum[];
@@ -39,6 +41,9 @@ export default function AlbumsClientPage({ initialAlbums, limit: initialLimit = 
 
     const [availableAlbums, setAvailableAlbums] = useState<LastfmUserTopAlbum[]>(initialAlbums);
     const [activeAlbum, setActiveAlbum] = useState<LastfmUserTopAlbum | null>(null);
+
+    // Theme detection
+    const { theme } = useTheme();
 
     const sensors = useSensors(
         useSensor(MouseSensor, {
@@ -146,6 +151,148 @@ export default function AlbumsClientPage({ initialAlbums, limit: initialLimit = 
         });
     };
 
+    // Export handler - Manual canvas approach to avoid lab() color issues
+    const handleExport = async () => {
+        try {
+            // Determine colors based on theme
+            const isDark = theme === 'dark';
+            const bgColor = isDark ? '#000000' : '#ffffff';
+            const textColor = isDark ? '#ffffff' : '#000000';
+            const gridBorderColor = isDark ? '#666666' : '#333333';
+            const cellBorderColor = isDark ? '#444444' : '#333333';
+            const gridBgColor = isDark ? '#1a1a1a' : '#f5f5f5';
+
+            const filledAlbums = gridAlbums
+                .map((album, index) => ({ album, index }))
+                .filter(({ album }) => album !== null);
+
+            if (filledAlbums.length === 0) {
+                alert("Please add some albums to the grid before exporting.");
+                return;
+            }
+
+            // Calculate grid dimensions
+            const sqrt = Math.sqrt(gridSize);
+            const isSquare = Number.isInteger(sqrt);
+            const columns = isSquare ? sqrt : (gridSize <= 5 ? gridSize : 5);
+            const rows = Math.ceil(gridSize / columns);
+
+            const cellSize = 200;
+            const gridWidth = columns * cellSize;
+            const gridHeight = rows * cellSize;
+            const listWidth = 400;
+            const padding = 40;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = gridWidth + listWidth + padding * 3;
+            canvas.height = Math.max(gridHeight, filledAlbums.length * 20 + 100) + padding * 2;
+
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            // Background
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw grid background
+            ctx.fillStyle = gridBgColor;
+            ctx.fillRect(padding, padding, gridWidth, gridHeight);
+
+            // Draw grid border
+            ctx.strokeStyle = gridBorderColor;
+            ctx.lineWidth = 4;
+            ctx.strokeRect(padding, padding, gridWidth, gridHeight);
+
+            // Draw grid cells and load images
+            const imagePromises: Promise<void>[] = [];
+            const albumPositions: { x: number; y: number; index: number }[] = [];
+
+            for (let i = 0; i < gridSize; i++) {
+                const row = Math.floor(i / columns);
+                const col = i % columns;
+                const x = padding + col * cellSize;
+                const y = padding + row * cellSize;
+
+                // Cell border
+                ctx.strokeStyle = cellBorderColor;
+                ctx.lineWidth = 1;
+                ctx.strokeRect(x, y, cellSize, cellSize);
+
+                const album = gridAlbums[i];
+                if (album) {
+                    const imageUrl = album.images && album.images.length > 0
+                        ? album.images[album.images.length - 1].url
+                        : null;
+
+                    if (imageUrl) {
+                        const promise = new Promise<void>((resolve) => {
+                            const img = new Image();
+                            img.crossOrigin = 'anonymous';
+                            img.onload = () => {
+                                ctx.drawImage(img, x, y, cellSize, cellSize);
+                                resolve();
+                            };
+                            img.onerror = () => resolve(); // Continue even if image fails
+                            img.src = imageUrl;
+                        });
+                        imagePromises.push(promise);
+                    }
+
+                    // Store position for badge drawing later
+                    albumPositions.push({ x, y, index: i });
+                }
+            }
+
+            // Wait for all images to load
+            await Promise.all(imagePromises);
+
+            // Draw rank badges AFTER images are loaded
+            albumPositions.forEach(({ x, y, index }) => {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(x + 5, y + 5, 30, 20);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 12px sans-serif';
+                ctx.fillText((index + 1).toString(), x + 12, y + 19);
+            });
+
+            // Draw album list
+            const listX = padding * 2 + gridWidth;
+            const listY = padding;
+
+            ctx.fillStyle = textColor;
+            ctx.font = 'bold 24px sans-serif';
+            ctx.fillText('Album List (Grid Position)', listX, listY + 30);
+
+            ctx.font = '14px sans-serif';
+            filledAlbums.forEach(({ album, index }, i) => {
+                const text = `${index + 1}. ${album!.name} - ${album!.artist.name}`;
+                const maxWidth = listWidth - 20;
+                let displayText = text;
+
+                // Truncate if too long
+                if (ctx.measureText(text).width > maxWidth) {
+                    while (ctx.measureText(displayText + '...').width > maxWidth && displayText.length > 0) {
+                        displayText = displayText.slice(0, -1);
+                    }
+                    displayText += '...';
+                }
+
+                ctx.fillStyle = textColor;
+                ctx.fillText(displayText, listX, listY + 70 + i * 20);
+            });
+
+            // Download
+            const link = document.createElement('a');
+            link.download = `topster-${gridSize}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+
+        } catch (error) {
+            console.error("Export failed:", error);
+            alert("Export failed. Check console for details.");
+        }
+    };
+
     return (
         <div className="flex h-screen overflow-hidden">
             <DndContext
@@ -177,6 +324,9 @@ export default function AlbumsClientPage({ initialAlbums, limit: initialLimit = 
                                     <SelectItem value="100">10x10 (100)</SelectItem>
                                 </SelectContent>
                             </Select>
+                            <Button onClick={handleExport} variant="outline" size="sm">
+                                Export Image
+                            </Button>
                         </div>
 
                         <TopsterGrid albums={gridAlbums} limit={gridSize} />
