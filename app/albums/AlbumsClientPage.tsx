@@ -15,8 +15,9 @@ import {
     TouchSensor,
     DragStartEvent,
     DragEndEvent,
-    closestCenter,
+    pointerWithin,
 } from "@dnd-kit/core";
+import { snapCenterToCursor } from "@dnd-kit/modifiers";
 import DraggableAlbumCard from "@/components/DraggableAlbumCard";
 import {
     Select,
@@ -408,7 +409,7 @@ export default function AlbumsClientPage({ username, limit: initialLimit = 9, in
                     sensors={sensors}
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
-                    collisionDetection={closestCenter}
+                    collisionDetection={pointerWithin}
                 >
                     {/* Left Side: Topster Grid */}
                     <div className="flex-1 bg-secondary/20 h-full overflow-auto block">
@@ -456,10 +457,9 @@ export default function AlbumsClientPage({ username, limit: initialLimit = 9, in
                     {/* Right Side: Scrollable List (Filtered) */}
                     <AlbumList albums={filteredAvailableAlbums} />
 
-                    {/* Drag Overlay (Portal) */}
-                    <DragOverlay zIndex={9999} dropAnimation={null}>
+                    <DragOverlay zIndex={9999} dropAnimation={null} modifiers={[snapCenterToCursor]}>
                         {activeAlbum ? (
-                            <div style={{ width: 200, height: 200, cursor: 'grabbing' }}>
+                            <div className="pointer-events-none w-[100px] h-[100px] md:w-[200px] md:h-[200px]" style={{ cursor: 'grabbing' }}>
                                 <DraggableAlbumCard
                                     album={activeAlbum}
                                     index={0}
