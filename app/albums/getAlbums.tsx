@@ -14,10 +14,10 @@ interface AlbumRecord {
 }
 
 /**
- * Check if albums are in the AOTY database using batched SQL queries
+ * Check if albums are in the AOTY database using batched SQL queries (case-insensitive)
  * SQLite has a max expression tree depth of 1000, so we batch queries to avoid this limit
  * @param albums Array of albums to check
- * @returns Set of album keys (album_name|artist) that exist in the database
+ * @returns Set of album keys (lowercase album_name|artist) that exist in the database
  */
 function getMatchingAlbumsFromDB(albums: LastfmUserTopAlbum[]): Set<string> {
   if (albums.length === 0) {
@@ -35,8 +35,8 @@ function getMatchingAlbumsFromDB(albums: LastfmUserTopAlbum[]): Set<string> {
     for (let i = 0; i < albums.length; i += BATCH_SIZE) {
       const batch = albums.slice(i, i + BATCH_SIZE);
 
-      // Build query for this batch
-      const conditions = batch.map(() => '(album_name = ? AND artist = ?)').join(' OR ');
+      // Build case-insensitive query for this batch using LOWER()
+      const conditions = batch.map(() => '(LOWER(album_name) = LOWER(?) AND LOWER(artist) = LOWER(?))').join(' OR ');
 
       // Flatten the parameters array for this batch
       const params: string[] = [];
@@ -54,9 +54,9 @@ function getMatchingAlbumsFromDB(albums: LastfmUserTopAlbum[]): Set<string> {
       const stmt = db.prepare(query);
       const results = stmt.all(...params) as AlbumRecord[];
 
-      // Add results to the set
+      // Add results to the set using lowercase keys for case-insensitive matching
       results.forEach(row => {
-        matchingSet.add(`${row.album_name}|${row.artist}`);
+        matchingSet.add(`${row.album_name.toLowerCase()}|${row.artist.toLowerCase()}`);
       });
     }
 
@@ -87,15 +87,17 @@ async function getAllListenedAlbums(username: string): Promise<LastfmUserTopAlbu
 /**
  * Get all albums from Last.fm that are also in the AOTY database
  * Optimized to make only ONE SQL query regardless of the number of albums
+ * Uses case-insensitive matching for album names and artists
  */
 export async function getAlbumsData(username: string) {
   const allListenedAlbums = await getAllListenedAlbums(username);
 
-  // Single database call to check all albums at once
+  // Single database call to check all albums at once (case-insensitive)
   const matchingAlbums = getMatchingAlbumsFromDB(allListenedAlbums);
 
   // Filter the albums based on the matching set (O(1) lookup per album)
+  // Use lowercase keys for case-insensitive matching
   return allListenedAlbums.filter((album) =>
-    matchingAlbums.has(`${album.name}|${album.artist.name}`)
+    matchingAlbums.has(`${album.name.toLowerCase()}|${album.artist.name.toLowerCase()}`)
   );
 }
