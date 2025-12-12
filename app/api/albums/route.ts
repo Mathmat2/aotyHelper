@@ -132,12 +132,12 @@ async function getAllListenedAlbums(username: string): Promise<LastfmUserTopAlbu
  * Uses case-insensitive matching for album names and artists
  * @param username Last.fm username
  */
-async function getAlbumsData(username: string) {
+async function getAlbumsData(username: string, includeEPs: boolean) {
     const allListenedAlbums = await getAllListenedAlbums(username);
 
     // Query both databases
     const matchingAlbums = getMatchingAlbumsFromDB(allListenedAlbums, ALBUMS_DB_PATH);
-    const matchingEPs = getMatchingAlbumsFromDB(allListenedAlbums, EPS_DB_PATH);
+    const matchingEPs = includeEPs ? getMatchingAlbumsFromDB(allListenedAlbums, EPS_DB_PATH) : new Set<string>();
 
     return allListenedAlbums
         .map(album => {
@@ -170,7 +170,9 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        const albums = await getAlbumsData(username);
+        const includeEPs = searchParams.get('includeEPs') === 'true';
+
+        const albums = await getAlbumsData(username, includeEPs);
 
         return NextResponse.json({ albums }, { status: 200 });
     } catch (error) {

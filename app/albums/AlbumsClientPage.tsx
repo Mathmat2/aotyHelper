@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { LastfmUserTopAlbum } from "@musicorum/lastfm/dist/types/packages/user";
 
 type ExtendedAlbum = LastfmUserTopAlbum & { matchedType?: 'lp' | 'ep' };
@@ -42,6 +42,8 @@ export default function AlbumsClientPage({ username, limit: initialLimit = 9, in
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [includeEPs, setIncludeEPs] = useState(initialIncludeEPs);
+    const [hasLoadedEPs, setHasLoadedEPs] = useState(initialIncludeEPs);
+    const fetchingRef = useRef(false);
 
     // Grid state
     const [gridSize, setGridSize] = useState<number>(initialLimit);
@@ -64,44 +66,59 @@ export default function AlbumsClientPage({ username, limit: initialLimit = 9, in
     }, [cachedAlbums, includeEPs]);
 
     // Fetch albums from API
-    useEffect(() => {
-        if (!username) {
-            setLoading(false);
-            return;
-        }
+    // Fetch albums from API
+    const fetchAlbums = useCallback(async (loadEPs: boolean) => {
+        if (!username || fetchingRef.current) return;
 
-        const fetchAlbums = async () => {
-            try {
-                setLoading(true);
-                setError(null);
-                const params = new URLSearchParams({
-                    username: username,
-                });
+        try {
+            fetchingRef.current = true;
+            setLoading(true);
+            setError(null);
+            const params = new URLSearchParams({
+                username: username,
+            });
 
-                // The API will now always return all albums (LPs + EPs)
-                // No need to conditionally append 'includeEPs'
-                params.append('includeEPs', 'true'); // Explicitly request all
+            // Only request EPs if explicitly asked
+            params.append('includeEPs', loadEPs.toString());
 
-                const response = await fetch(`/api/albums?${params.toString()}`);
+            const response = await fetch(`/api/albums?${params.toString()}`);
 
-                if (!response.ok) {
-                    throw new Error('Failed to fetch albums');
-                }
-
-                const data = await response.json();
-
-                // We now get everything (LPs + EPs) in one go
-                setCachedAlbums(data.albums);
-
-            } catch (err) {
-                setError(err instanceof Error ? err.message : 'An error occurred');
-            } finally {
-                setLoading(false);
+            if (!response.ok) {
+                throw new Error('Failed to fetch albums');
             }
-        };
 
-        fetchAlbums();
+            const data = await response.json();
+
+            setCachedAlbums(data.albums);
+            if (loadEPs) setHasLoadedEPs(true);
+
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'An error occurred');
+        } finally {
+            setLoading(false);
+            fetchingRef.current = false;
+        }
     }, [username]);
+
+    // Initial fetch on username change
+    useEffect(() => {
+        // Reset state on new username
+        setHasLoadedEPs(initialIncludeEPs);
+        setCachedAlbums([]);
+        // Fetch based on initial preference (likely false)
+        // If initialIncludeEPs is true, we fetch true.
+        // We use the initial prop here to decide the first fetch?
+        // Or current state? Current state is initialized to prop.
+        fetchAlbums(includeEPs);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [username, fetchAlbums]); // Intentionally exclude includeEPs to avoid re-fetch on simple toggle
+
+    // Handle Toggle ON to lazy load
+    useEffect(() => {
+        if (includeEPs && !hasLoadedEPs) {
+            fetchAlbums(true);
+        }
+    }, [includeEPs, hasLoadedEPs, fetchAlbums]);
 
     // Clean up grid albums when includeEPs is turned off
     useEffect(() => {
