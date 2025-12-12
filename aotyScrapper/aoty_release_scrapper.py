@@ -1,15 +1,13 @@
 from datetime import datetime
 from bs4 import BeautifulSoup
 import cloudscraper
-import re
+import sqlite3
 import os
-import json
 from random import randint
 from time import sleep
 from tqdm import tqdm
 
 scraper = cloudscraper.create_scraper()
-albums_json = {}
 months = [
     "january",
     "february",
@@ -25,16 +23,44 @@ months = [
     "december"
 ]
 
-def pageScrapper(soup, month, albums_json):
+# Initialize SQLite database
+db_path = "albums.db"
+conn = sqlite3.connect(db_path)
+cursor = conn.cursor()
+
+# Create table if it doesn't exist with unique constraint
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS albums (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        album_name TEXT NOT NULL,
+        artist TEXT NOT NULL,
+        release_date TEXT NOT NULL,
+        month TEXT NOT NULL,
+        UNIQUE(album_name, artist, release_date)
+    )
+''')
+conn.commit()
+
+def pageScrapper(soup, month, year, cursor, conn):
     albums = soup.find_all('div', class_='albumBlock')
 
     for album in albums:
         artist_name = album.find('div', class_='artistTitle').text
         album_title = album.find('div', class_='albumTitle').text
+        
+        # Create release_date in YYYY-MM format
+        month_number = months.index(month) + 1
+        release_date = f"{year}-{month_number:02}"
+        
+        # Insert into database (ignore duplicates)
+        cursor.execute('''
+            INSERT OR IGNORE INTO albums (album_name, artist, release_date, month)
+            VALUES (?, ?, ?, ?)
+        ''', (album_title, artist_name, release_date, month))
+    
+    conn.commit()
 
-        albums_json[album_title] = [artist_name, month]
-
-def monthScrapper(baseUrl, month, albums_json):
+def monthScrapper(baseUrl, month, year, cursor, conn):
     page_count = 1
     month_number = months.index(month) + 1
     month_string = f"{month}-{month_number:02}"
@@ -42,7 +68,7 @@ def monthScrapper(baseUrl, month, albums_json):
     
     page = scraper.get(url)
     soup = BeautifulSoup(page.content.decode('utf-8'), 'html.parser')
-    pageScrapper(soup, month, albums_json)
+    pageScrapper(soup, month, year, cursor, conn)
     page_count += 1
 
     while True:
@@ -60,23 +86,30 @@ def monthScrapper(baseUrl, month, albums_json):
             break
 
         url = baseUrl + f"/{month_string}/{page_count}/?type=lp"
-        pageScrapper(soup, month, albums_json)
+        pageScrapper(soup, month, year, cursor, conn)
         page_count += 1
 
-def yearScrapper(baseUrl, year, albums_json):
+def yearScrapper(baseUrl, year, cursor, conn):
     url = baseUrl + f"/{year}/releases"
     current_month = datetime.now().strftime("%B").casefold()
     print(current_month)
 
     for month in months:
-        monthScrapper(url, month, albums_json)
+        monthScrapper(url, month, year, cursor, conn)
         if month == current_month:
             break
 
 url = f"https://www.albumoftheyear.org"
 
-yearScrapper(url, "2025", albums_json)
-
-with open("albums.json", 'w', encoding='utf8') as outfile:
-    json.dump(albums_json, outfile, indent=2, ensure_ascii=False)
+try:
+    yearScrapper(url, "2025", cursor, conn)
+    print(f"\nSuccessfully scraped albums to {db_path}")
+    
+    # Print summary
+    cursor.execute("SELECT COUNT(*) FROM albums")
+    count = cursor.fetchone()[0]
+    print(f"Total albums in database: {count}")
+finally:
+    # Close database connection
+    conn.close()
 

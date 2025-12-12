@@ -1,20 +1,69 @@
 import { LastClient } from '@musicorum/lastfm'
-// import { MusicBrainzApi } from 'musicbrainz-api'; // Unused
 import { LastfmUserTopAlbum } from '@musicorum/lastfm/dist/types/packages/user';
-import albums from '../../aotyScrapper/albums.json'
-
-// Move state out of module scope if possible, or keep it but reset it?
-// Next.js formatting reuse might make this stateful across requests if not careful.
-// Better to simple return data instead of using global let.
+import Database from 'better-sqlite3';
+import path from 'path';
 
 const api_key = "d4a74389a07c99517bf12a4f2f11b991"
-const albumsData = albums as Record<string, string[]>;
 
-function isAlbumInList(albumName: string, artist: string) {
-  if (albumName in albumsData) {
-    return artist == albumsData[albumName][0]
+// Database path - adjust based on your project structure
+const DB_PATH = path.join(process.cwd(), 'aotyScrapper', 'albums.db');
+
+interface AlbumRecord {
+  album_name: string;
+  artist: string;
+}
+
+/**
+ * Check if albums are in the AOTY database using batched SQL queries
+ * SQLite has a max expression tree depth of 1000, so we batch queries to avoid this limit
+ * @param albums Array of albums to check
+ * @returns Set of album keys (album_name|artist) that exist in the database
+ */
+function getMatchingAlbumsFromDB(albums: LastfmUserTopAlbum[]): Set<string> {
+  if (albums.length === 0) {
+    return new Set<string>();
   }
-  return false
+
+  const db = new Database(DB_PATH, { readonly: true });
+  const matchingSet = new Set<string>();
+
+  try {
+    // Process albums in batches to avoid SQLite expression tree depth limit (1000)
+    // Using batch size of 500 to stay well under the limit (each album = 2 conditions)
+    const BATCH_SIZE = 500;
+
+    for (let i = 0; i < albums.length; i += BATCH_SIZE) {
+      const batch = albums.slice(i, i + BATCH_SIZE);
+
+      // Build query for this batch
+      const conditions = batch.map(() => '(album_name = ? AND artist = ?)').join(' OR ');
+
+      // Flatten the parameters array for this batch
+      const params: string[] = [];
+      batch.forEach(album => {
+        params.push(album.name, album.artist.name);
+      });
+
+      // Query for this batch
+      const query = `
+        SELECT DISTINCT album_name, artist 
+        FROM albums 
+        WHERE ${conditions}
+      `;
+
+      const stmt = db.prepare(query);
+      const results = stmt.all(...params) as AlbumRecord[];
+
+      // Add results to the set
+      results.forEach(row => {
+        matchingSet.add(`${row.album_name}|${row.artist}`);
+      });
+    }
+
+    return matchingSet;
+  } finally {
+    db.close();
+  }
 }
 
 async function getAllListenedAlbums(username: string): Promise<LastfmUserTopAlbum[]> {
@@ -27,16 +76,6 @@ async function getAllListenedAlbums(username: string): Promise<LastfmUserTopAlbu
   let allListenedAlbums: LastfmUserTopAlbum[] = []
   allListenedAlbums = allListenedAlbums.concat(topAlbumsPages.getPage(1))
 
-  // Fix loop to fetch page i, not page 2 always
-  // And cap it if necessary, though limit handled per page is default?
-  // If limit=5, pages=1.
-
-  // The original code loop suggests it wanted ALL albums? "getAllListenedAlbums".
-  // Note: user input "limit" was "Number of albums".
-  // If I put limit=5 here, I get 5 albums.
-  // If I want to match against AOTY, getting just 5 might return 0 matches.
-  // I'll stick to using the limit for the API call for now.
-
   if (topAlbumsPages.totalPages > 1) {
     for (let i = 2; i <= topAlbumsPages.totalPages; i++) {
       allListenedAlbums = allListenedAlbums.concat(await topAlbumsPages.fetchPage(i))
@@ -45,8 +84,18 @@ async function getAllListenedAlbums(username: string): Promise<LastfmUserTopAlbu
   return allListenedAlbums;
 }
 
-// This function now returns data, not a component.
+/**
+ * Get all albums from Last.fm that are also in the AOTY database
+ * Optimized to make only ONE SQL query regardless of the number of albums
+ */
 export async function getAlbumsData(username: string) {
-  const allListenedAlbums = await getAllListenedAlbums(username)
-  return allListenedAlbums.filter((album) => isAlbumInList(album.name, album.artist.name))
+  const allListenedAlbums = await getAllListenedAlbums(username);
+
+  // Single database call to check all albums at once
+  const matchingAlbums = getMatchingAlbumsFromDB(allListenedAlbums);
+
+  // Filter the albums based on the matching set (O(1) lookup per album)
+  return allListenedAlbums.filter((album) =>
+    matchingAlbums.has(`${album.name}|${album.artist.name}`)
+  );
 }
