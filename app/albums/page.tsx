@@ -7,7 +7,7 @@ export default async function AlbumsPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
   const { username, limit } = await searchParams;
-  const parsedLimit = Number(limit) || 5;
+  const parsedLimit = Number(limit) || 9;
   const albums = await getAlbumsData(username as string);
 
   return (

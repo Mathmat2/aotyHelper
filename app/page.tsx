@@ -37,7 +37,7 @@ export default function Home() {
     resolver: zodResolver(FormSchema),
     defaultValues: {
       username: "",
-      limit: "5",
+      limit: "9",
     },
   })
 
@@ -85,18 +85,21 @@ export default function Home() {
               name="limit"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Number of albums</FormLabel>
+                  <FormLabel>Grid Size</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select number of albums" />
+                        <SelectValue placeholder="Select grid size" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="5">5</SelectItem>
-                      <SelectItem value="10">10</SelectItem>
-                      <SelectItem value="20">20</SelectItem>
-                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="9">3x3 (9)</SelectItem>
+                      <SelectItem value="16">4x4 (16)</SelectItem>
+                      <SelectItem value="25">5x5 (25)</SelectItem>
+                      <SelectItem value="40">5x8 (40)</SelectItem>
+                      <SelectItem value="42">Topster (42)</SelectItem>
+                      <SelectItem value="49">7x7 (49)</SelectItem>
+                      <SelectItem value="100">10x10 (100)</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
