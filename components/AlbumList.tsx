@@ -16,6 +16,7 @@ export default function AlbumList({ albums }: AlbumListProps) {
     });
 
     const [searchQuery, setSearchQuery] = useState("");
+    const [visibleCount, setVisibleCount] = useState(50);
 
     const filteredAlbums = albums.filter((album) => {
         if (!searchQuery) return true;
@@ -25,6 +26,23 @@ export default function AlbumList({ albums }: AlbumListProps) {
             album.artist.name.toLowerCase().includes(query)
         );
     });
+
+    // Reset visible count when search query changes
+    if (searchQuery && visibleCount !== 50 && filteredAlbums.length <= 50) {
+        // logic handled in effect or simply let it be dynamic
+    }
+
+    // Better: use effect to reset when search changes
+    // But direct render logic is fine if we slice.
+
+    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        const { scrollTop, clientHeight, scrollHeight } = e.currentTarget;
+        if (scrollHeight - scrollTop <= clientHeight * 1.5) {
+            setVisibleCount(prev => Math.min(prev + 50, filteredAlbums.length));
+        }
+    };
+
+    const visibleAlbums = filteredAlbums.slice(0, visibleCount);
 
     return (
         <div className="w-[300px] border-l border-border h-[calc(100vh-40px)] flex flex-col bg-background">
@@ -39,14 +57,18 @@ export default function AlbumList({ albums }: AlbumListProps) {
                 <Input
                     placeholder="Search albums..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setVisibleCount(50); // Reset visible count on search
+                    }}
                 />
             </div>
             <div
                 ref={setNodeRef}
                 className="flex-1 overflow-y-auto p-4 space-y-2"
+                onScroll={handleScroll}
             >
-                {filteredAlbums.map((album, index) => (
+                {visibleAlbums.map((album, index) => (
                     <DraggableAlbumCard
                         key={`${album.name}-${album.artist.name}`}
                         id={`list-${album.name}-${album.artist.name}`} // Unique ID for list items

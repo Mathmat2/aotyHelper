@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
   SelectContent,
@@ -19,6 +20,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form"
 import { useRouter } from 'next/navigation'
 import Image from "next/image"
@@ -29,6 +31,7 @@ const FormSchema = z.object({
     message: "Username must be at least 2 characters.",
   }),
   limit: z.string(),
+  includeEPs: z.boolean().default(false),
 })
 
 export default function Home() {
@@ -38,11 +41,21 @@ export default function Home() {
     defaultValues: {
       username: "",
       limit: "9",
+      includeEPs: false,
     },
   })
 
   function onSubmit(data: z.infer<typeof FormSchema>) {
-    router.push(`/albums?username=${data.username}&limit=${data.limit}`)
+    const params = new URLSearchParams({
+      username: data.username,
+      limit: data.limit,
+    });
+
+    if (data.includeEPs) {
+      params.append('includeEPs', 'true');
+    }
+
+    router.push(`/albums?${params.toString()}`);
   }
 
   return (
@@ -103,6 +116,29 @@ export default function Home() {
                     </SelectContent>
                   </Select>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="includeEPs"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel>
+                      Include EPs
+                    </FormLabel>
+                    <FormDescription>
+                      Include EPs alongside albums in your collection
+                    </FormDescription>
+                  </div>
                 </FormItem>
               )}
             />

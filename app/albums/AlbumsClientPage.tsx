@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { LastfmUserTopAlbum } from "@musicorum/lastfm/dist/types/packages/user";
+
+type ExtendedAlbum = LastfmUserTopAlbum & { matchedType?: 'lp' | 'ep' };
 import TopsterGrid from "@/components/TopsterGrid";
 import AlbumList from "@/components/AlbumList";
 import {
@@ -23,29 +25,42 @@ import {
     SelectValue
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { useTheme } from "next-themes";
 
 interface AlbumsClientPageProps {
     username: string;
     limit?: number;
+    includeEPs?: boolean;
 }
 
-export default function AlbumsClientPage({ username, limit: initialLimit = 9 }: AlbumsClientPageProps) {
+export default function AlbumsClientPage({ username, limit: initialLimit = 9, includeEPs: initialIncludeEPs = false }: AlbumsClientPageProps) {
     // Data fetching state
-    const [albums, setAlbums] = useState<LastfmUserTopAlbum[]>([]);
+    const [cachedAlbums, setCachedAlbums] = useState<ExtendedAlbum[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [includeEPs, setIncludeEPs] = useState(initialIncludeEPs);
 
     // Grid state
     const [gridSize, setGridSize] = useState<number>(initialLimit);
 
     // Initialize grid with the custom size logic, but here we just use the initialLimit
-    const [gridAlbums, setGridAlbums] = useState<(LastfmUserTopAlbum | null)[]>(
+    const [gridAlbums, setGridAlbums] = useState<(ExtendedAlbum | null)[]>(
         Array(initialLimit).fill(null)
     );
 
-    const [availableAlbums, setAvailableAlbums] = useState<LastfmUserTopAlbum[]>([]);
-    const [activeAlbum, setActiveAlbum] = useState<LastfmUserTopAlbum | null>(null);
+    const [availableAlbums, setAvailableAlbums] = useState<ExtendedAlbum[]>([]);
+    const [activeAlbum, setActiveAlbum] = useState<ExtendedAlbum | null>(null);
+
+    // Filter available albums based on current toggle state
+    useEffect(() => {
+        if (includeEPs) {
+            setAvailableAlbums(cachedAlbums);
+        } else {
+            setAvailableAlbums(cachedAlbums.filter(a => a.matchedType === 'lp'));
+        }
+    }, [cachedAlbums, includeEPs]);
 
     // Fetch albums from API
     useEffect(() => {
@@ -58,15 +73,25 @@ export default function AlbumsClientPage({ username, limit: initialLimit = 9 }: 
             try {
                 setLoading(true);
                 setError(null);
-                const response = await fetch(`/api/albums?username=${encodeURIComponent(username)}`);
+                const params = new URLSearchParams({
+                    username: username,
+                });
+
+                // The API will now always return all albums (LPs + EPs)
+                // No need to conditionally append 'includeEPs'
+                params.append('includeEPs', 'true'); // Explicitly request all
+
+                const response = await fetch(`/api/albums?${params.toString()}`);
 
                 if (!response.ok) {
                     throw new Error('Failed to fetch albums');
                 }
 
                 const data = await response.json();
-                setAlbums(data.albums);
-                setAvailableAlbums(data.albums);
+
+                // We now get everything (LPs + EPs) in one go
+                setCachedAlbums(data.albums);
+
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'An error occurred');
             } finally {
@@ -76,6 +101,18 @@ export default function AlbumsClientPage({ username, limit: initialLimit = 9 }: 
 
         fetchAlbums();
     }, [username]);
+
+    // Clean up grid albums when includeEPs is turned off
+    useEffect(() => {
+        if (!includeEPs) {
+            setGridAlbums(prevGrid =>
+                prevGrid.map(album =>
+                    // If album exists and is an EP, remove it (return null)
+                    album?.matchedType === 'ep' ? null : album
+                )
+            );
+        }
+    }, [includeEPs]);
 
     // Theme detection
     const { theme } = useTheme();
@@ -98,7 +135,7 @@ export default function AlbumsClientPage({ username, limit: initialLimit = 9 }: 
         const { active } = event;
         // Retrieve album data stored in useDraggable
         if (active.data.current && active.data.current.album) {
-            setActiveAlbum(active.data.current.album as LastfmUserTopAlbum);
+            setActiveAlbum(active.data.current.album as ExtendedAlbum);
         }
     };
 
@@ -121,7 +158,7 @@ export default function AlbumsClientPage({ username, limit: initialLimit = 9 }: 
         // 1. Drop on Grid Slot
         if (destId.startsWith("topster-slot-")) {
             const destIndex = parseInt(destId.replace("topster-slot-", ""), 10);
-            const draggedAlbum = activeData?.album as LastfmUserTopAlbum;
+            const draggedAlbum = activeData?.album as ExtendedAlbum;
 
             if (!draggedAlbum) return;
 
@@ -378,7 +415,17 @@ export default function AlbumsClientPage({ username, limit: initialLimit = 9 }: 
                                         <SelectItem value="100">10x10 (100)</SelectItem>
                                     </SelectContent>
                                 </Select>
-                                <Button onClick={handleExport} variant="outline" size="sm">
+
+                                <div className="flex items-center space-x-2 border-l pl-4 border-border/50">
+                                    <Switch
+                                        id="include-eps"
+                                        checked={includeEPs}
+                                        onCheckedChange={setIncludeEPs}
+                                    />
+                                    <Label htmlFor="include-eps" className="text-sm font-medium cursor-pointer">Include EPs</Label>
+                                </div>
+
+                                <Button onClick={handleExport} variant="outline" size="sm" className="ml-auto">
                                     Export Image
                                 </Button>
                             </div>
