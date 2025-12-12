@@ -31,7 +31,7 @@ const FormSchema = z.object({
     message: "Username must be at least 2 characters.",
   }),
   limit: z.string(),
-  includeEPs: z.boolean().default(false),
+  includeEPs: z.boolean(),
 })
 
 export default function Home() {
