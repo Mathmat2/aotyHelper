@@ -80,7 +80,27 @@ async function getAllListenedAlbums(username: string): Promise<LastfmUserTopAlbu
     });
 
     let allListenedAlbums: LastfmUserTopAlbum[] = [...firstPage.getPage(1)];
-    const totalPages = firstPage.totalPages;
+
+    // Safety limit: Max 3000 albums (3 pages) to prevent timeouts for heavy listeners
+    // 99.9% of users don't chart albums outside their top 3000
+    const MAX_PAGES = 3;
+    const totalPages = Math.min(firstPage.totalPages, MAX_PAGES);
+
+    // Helper for safe fetching with retry
+    const fetchPageSafe = async (page: number, retries = 3): Promise<LastfmUserTopAlbum[]> => {
+        try {
+            const res = await firstPage.fetchPage(page);
+            return res;
+        } catch (err) {
+            if (retries > 0) {
+                // Wait 1s before retry
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                return fetchPageSafe(page, retries - 1);
+            }
+            console.error(`Failed to fetch page ${page} after retries:`, err);
+            return []; // Return empty array instead of failing entire request
+        }
+    };
 
     if (totalPages > 1) {
         const pagesToFetch = [];
@@ -88,16 +108,19 @@ async function getAllListenedAlbums(username: string): Promise<LastfmUserTopAlbu
             pagesToFetch.push(i);
         }
 
-        // Process in batches of 5 to respect rate limits while speeding up
-        const BATCH_SIZE = 5;
+        // Reduced BATCH_SIZE to 3 to be safer against rate limits
+        const BATCH_SIZE = 3;
         for (let i = 0; i < pagesToFetch.length; i += BATCH_SIZE) {
             const batch = pagesToFetch.slice(i, i + BATCH_SIZE);
-            const promises = batch.map(page => firstPage.fetchPage(page));
+            const promises = batch.map(page => fetchPageSafe(page));
 
             const results = await Promise.all(promises);
             results.forEach(pageAlbums => {
                 allListenedAlbums = allListenedAlbums.concat(pageAlbums);
             });
+
+            // Small delay between batches
+            await new Promise(resolve => setTimeout(resolve, 200));
         }
     }
     return allListenedAlbums;
@@ -119,13 +142,18 @@ async function getAlbumsData(username: string) {
     return allListenedAlbums
         .map(album => {
             const key = `${album.name.toLowerCase()}|${album.artist.name.toLowerCase()}`;
-            if (matchingAlbums.has(key)) {
-                return { ...album, matchedType: 'lp' };
-            }
-            if (matchingEPs.has(key)) {
-                return { ...album, matchedType: 'ep' };
-            }
-            return null;
+            const matchedType = matchingAlbums.has(key) ? 'lp' : (matchingEPs.has(key) ? 'ep' : null);
+
+            if (!matchedType) return null;
+
+            // payload optimization: keep only necessary fields and largest image
+            return {
+                name: album.name,
+                artist: { name: album.artist.name },
+                // Keep only the largest image to save bandwidth
+                images: album.images && album.images.length > 0 ? [album.images[album.images.length - 1]] : [],
+                matchedType
+            };
         })
         .filter((album): album is LastfmUserTopAlbum & { matchedType: 'lp' | 'ep' } => album !== null);
 }
