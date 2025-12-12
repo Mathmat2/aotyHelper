@@ -31,9 +31,9 @@ export default function DraggableAlbumCard({ album, index, coverOnly = false, id
             // But for now let's just use opacity.
             className={ // Dynamic class based on mode
                 coverOnly
-                    ? `relative w-full h-full overflow-hidden group touch-none
+                    ? `relative w-full h-full overflow-hidden group touch-manipulation select-none
                    ${isDragging ? "opacity-30" : ""}`
-                    : `flex flex-col items-center p-2 bg-card rounded-md border border-border shadow-sm touch-none
+                    : `flex flex-col items-center p-2 bg-card rounded-md border border-border shadow-sm touch-manipulation select-none
                    ${isDragging ? "opacity-30" : "hover:bg-muted/50"}`
             }
         >
