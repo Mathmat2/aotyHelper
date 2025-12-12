@@ -1,16 +1,14 @@
-import { getAlbumsData } from './getAlbums';
-import AlbumsClientPage from './AlbumsClientPage';
+'use client';
 
-export default async function AlbumsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
-}) {
-  const { username, limit } = await searchParams;
-  const parsedLimit = Number(limit) || 9;
-  const albums = await getAlbumsData(username as string);
+import AlbumsClientPage from './AlbumsClientPage';
+import { useSearchParams } from 'next/navigation';
+
+export default function AlbumsPage() {
+  const searchParams = useSearchParams();
+  const username = searchParams.get('username') || '';
+  const limit = Number(searchParams.get('limit')) || 9;
 
   return (
-    <AlbumsClientPage initialAlbums={albums} limit={parsedLimit} />
+    <AlbumsClientPage username={username} limit={limit} />
   );
 }

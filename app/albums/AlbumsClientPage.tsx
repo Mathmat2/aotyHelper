@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { LastfmUserTopAlbum } from "@musicorum/lastfm/dist/types/packages/user";
 import TopsterGrid from "@/components/TopsterGrid";
 import AlbumList from "@/components/AlbumList";
@@ -26,11 +26,16 @@ import { Button } from "@/components/ui/button";
 import { useTheme } from "next-themes";
 
 interface AlbumsClientPageProps {
-    initialAlbums: LastfmUserTopAlbum[];
+    username: string;
     limit?: number;
 }
 
-export default function AlbumsClientPage({ initialAlbums, limit: initialLimit = 9 }: AlbumsClientPageProps) {
+export default function AlbumsClientPage({ username, limit: initialLimit = 9 }: AlbumsClientPageProps) {
+    // Data fetching state
+    const [albums, setAlbums] = useState<LastfmUserTopAlbum[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
     // Grid state
     const [gridSize, setGridSize] = useState<number>(initialLimit);
 
@@ -39,8 +44,38 @@ export default function AlbumsClientPage({ initialAlbums, limit: initialLimit = 
         Array(initialLimit).fill(null)
     );
 
-    const [availableAlbums, setAvailableAlbums] = useState<LastfmUserTopAlbum[]>(initialAlbums);
+    const [availableAlbums, setAvailableAlbums] = useState<LastfmUserTopAlbum[]>([]);
     const [activeAlbum, setActiveAlbum] = useState<LastfmUserTopAlbum | null>(null);
+
+    // Fetch albums from API
+    useEffect(() => {
+        if (!username) {
+            setLoading(false);
+            return;
+        }
+
+        const fetchAlbums = async () => {
+            try {
+                setLoading(true);
+                setError(null);
+                const response = await fetch(`/api/albums?username=${encodeURIComponent(username)}`);
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch albums');
+                }
+
+                const data = await response.json();
+                setAlbums(data.albums);
+                setAvailableAlbums(data.albums);
+            } catch (err) {
+                setError(err instanceof Error ? err.message : 'An error occurred');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchAlbums();
+    }, [username]);
 
     // Theme detection
     const { theme } = useTheme();
@@ -295,61 +330,81 @@ export default function AlbumsClientPage({ initialAlbums, limit: initialLimit = 
 
     return (
         <div className="flex h-screen overflow-hidden">
-            <DndContext
-                sensors={sensors}
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
-            >
-                {/* Left Side: Topster Grid */}
-                <div className="flex-1 bg-secondary/20 h-full overflow-y-auto block">
-                    <div className="w-full min-h-full p-8 flex flex-col items-center justify-center space-y-4">
-
-                        {/* Control Bar */}
-                        <div className="bg-background/80 backdrop-blur rounded-lg border border-border p-2 flex gap-4 items-center mb-4">
-                            <span className="text-sm font-medium">Grid Size:</span>
-                            <Select
-                                value={gridSize.toString()}
-                                onValueChange={handleSizeChange}
-                            >
-                                <SelectTrigger className="w-[100px]">
-                                    <SelectValue placeholder="Size" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="9">3x3 (9)</SelectItem>
-                                    <SelectItem value="16">4x4 (16)</SelectItem>
-                                    <SelectItem value="25">5x5 (25)</SelectItem>
-                                    <SelectItem value="40">5x8 (40)</SelectItem>
-                                    <SelectItem value="42">Topster (42)</SelectItem>
-                                    <SelectItem value="49">7x7 (49)</SelectItem>
-                                    <SelectItem value="100">10x10 (100)</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <Button onClick={handleExport} variant="outline" size="sm">
-                                Export Image
-                            </Button>
-                        </div>
-
-                        <TopsterGrid albums={gridAlbums} limit={gridSize} />
+            {loading && (
+                <div className="flex-1 flex items-center justify-center">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                        <p className="text-muted-foreground">Loading albums...</p>
                     </div>
                 </div>
+            )}
 
-                {/* Right Side: Scrollable List (Filtered) */}
-                <AlbumList albums={filteredAvailableAlbums} />
+            {error && (
+                <div className="flex-1 flex items-center justify-center">
+                    <div className="text-center">
+                        <p className="text-destructive mb-2">Error: {error}</p>
+                        <p className="text-muted-foreground text-sm">Please try again later</p>
+                    </div>
+                </div>
+            )}
 
-                {/* Drag Overlay (Portal) */}
-                <DragOverlay zIndex={9999} dropAnimation={null}>
-                    {activeAlbum ? (
-                        <div style={{ width: 200, height: 200, cursor: 'grabbing' }}>
-                            <DraggableAlbumCard
-                                album={activeAlbum}
-                                index={0}
-                                coverOnly={true}
-                                id="overlay-item"
-                            />
+            {!loading && !error && (
+                <DndContext
+                    sensors={sensors}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                >
+                    {/* Left Side: Topster Grid */}
+                    <div className="flex-1 bg-secondary/20 h-full overflow-y-auto block">
+                        <div className="w-full min-h-full p-8 flex flex-col items-center justify-center space-y-4">
+
+                            {/* Control Bar */}
+                            <div className="bg-background/80 backdrop-blur rounded-lg border border-border p-2 flex gap-4 items-center mb-4">
+                                <span className="text-sm font-medium">Grid Size:</span>
+                                <Select
+                                    value={gridSize.toString()}
+                                    onValueChange={handleSizeChange}
+                                >
+                                    <SelectTrigger className="w-[100px]">
+                                        <SelectValue placeholder="Size" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="9">3x3 (9)</SelectItem>
+                                        <SelectItem value="16">4x4 (16)</SelectItem>
+                                        <SelectItem value="25">5x5 (25)</SelectItem>
+                                        <SelectItem value="40">5x8 (40)</SelectItem>
+                                        <SelectItem value="42">Topster (42)</SelectItem>
+                                        <SelectItem value="49">7x7 (49)</SelectItem>
+                                        <SelectItem value="100">10x10 (100)</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <Button onClick={handleExport} variant="outline" size="sm">
+                                    Export Image
+                                </Button>
+                            </div>
+
+                            <TopsterGrid albums={gridAlbums} limit={gridSize} />
                         </div>
-                    ) : null}
-                </DragOverlay>
-            </DndContext>
+                    </div>
+
+                    {/* Right Side: Scrollable List (Filtered) */}
+                    <AlbumList albums={filteredAvailableAlbums} />
+
+                    {/* Drag Overlay (Portal) */}
+                    <DragOverlay zIndex={9999} dropAnimation={null}>
+                        {activeAlbum ? (
+                            <div style={{ width: 200, height: 200, cursor: 'grabbing' }}>
+                                <DraggableAlbumCard
+                                    album={activeAlbum}
+                                    index={0}
+                                    coverOnly={true}
+                                    id="overlay-item"
+                                />
+                            </div>
+                        ) : null}
+                    </DragOverlay>
+                </DndContext>
+            )}
         </div>
     );
 }
