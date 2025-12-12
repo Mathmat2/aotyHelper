@@ -15,6 +15,7 @@ import {
     TouchSensor,
     DragStartEvent,
     DragEndEvent,
+    closestCenter,
 } from "@dnd-kit/core";
 import DraggableAlbumCard from "@/components/DraggableAlbumCard";
 import {
@@ -366,7 +367,7 @@ export default function AlbumsClientPage({ username, limit: initialLimit = 9, in
     };
 
     return (
-        <div className="flex h-screen overflow-hidden">
+        <div className="flex flex-col md:flex-row h-screen overflow-hidden">
             {loading && (
                 <div className="flex-1 flex items-center justify-center">
                     <div className="text-center">
@@ -390,13 +391,14 @@ export default function AlbumsClientPage({ username, limit: initialLimit = 9, in
                     sensors={sensors}
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
+                    collisionDetection={closestCenter}
                 >
                     {/* Left Side: Topster Grid */}
-                    <div className="flex-1 bg-secondary/20 h-full overflow-y-auto block">
+                    <div className="flex-1 bg-secondary/20 h-full overflow-auto block">
                         <div className="w-full min-h-full p-8 flex flex-col items-center justify-center space-y-4">
 
                             {/* Control Bar */}
-                            <div className="bg-background/80 backdrop-blur rounded-lg border border-border p-2 flex gap-4 items-center mb-4">
+                            <div className="bg-background/80 backdrop-blur rounded-lg border border-border p-2 flex flex-wrap gap-4 items-center justify-center md:justify-start mb-4">
                                 <span className="text-sm font-medium">Grid Size:</span>
                                 <Select
                                     value={gridSize.toString()}

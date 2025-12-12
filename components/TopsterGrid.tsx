@@ -108,11 +108,11 @@ export default function TopsterGrid({ albums, limit, isExportMode = false }: Top
     }
 
     return (
-        <div className="bg-transparent p-0 rounded-none shadow-none border-none w-fit h-fit">
+        <div className="bg-transparent p-0 rounded-none shadow-none border-none w-fit h-fit [--min-cell-size:80px] md:[--min-cell-size:200px]">
             <div
                 className="grid gap-0 border-[4px] border-border bg-muted"
                 style={{
-                    gridTemplateColumns: `repeat(${columns}, minmax(200px, 1fr))`
+                    gridTemplateColumns: `repeat(${columns}, minmax(var(--min-cell-size), 1fr))`
                 }}
             >
                 {Array.from({ length: limit }).map((_, index) => (

@@ -45,7 +45,7 @@ export default function AlbumList({ albums }: AlbumListProps) {
     const visibleAlbums = filteredAlbums.slice(0, visibleCount);
 
     return (
-        <div className="w-[300px] border-l border-border h-[calc(100vh-40px)] flex flex-col bg-background">
+        <div className="w-full md:w-[300px] h-[40vh] md:h-full border-t md:border-t-0 md:border-l border-border flex flex-col bg-background">
             <div className="p-4 border-b border-border space-y-4">
                 <div className="flex items-center justify-between">
                     <div>
