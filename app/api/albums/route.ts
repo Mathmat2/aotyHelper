@@ -69,21 +69,45 @@ function getMatchingAlbumsFromDB(albums: LastfmUserTopAlbum[], dbPath: string): 
     }
 }
 
-async function getAllListenedAlbums(username: string): Promise<LastfmUserTopAlbum[]> {
+async function getAlbumsData(username: string, includeEPs: boolean) {
     const client = new LastClient(api_key);
+    const result: any[] = [];
+    const MAX_PAGES = 3;
 
-    // First fetch to get total pages
+    // Helper to process a batch of albums
+    const processBatch = (albums: LastfmUserTopAlbum[]) => {
+        if (albums.length === 0) return;
+
+        const matchingAlbums = getMatchingAlbumsFromDB(albums, ALBUMS_DB_PATH);
+        const matchingEPs = includeEPs ? getMatchingAlbumsFromDB(albums, EPS_DB_PATH) : new Set<string>();
+
+        for (const album of albums) {
+            const key = `${album.name.toLowerCase()}|${album.artist.name.toLowerCase()}`;
+            const matchedType = matchingAlbums.has(key) ? 'lp' : (matchingEPs.has(key) ? 'ep' : null);
+
+            if (matchedType) {
+                result.push({
+                    name: album.name,
+                    artist: { name: album.artist.name },
+                    // Keep only the largest image to save bandwidth
+                    images: album.images && album.images.length > 0 ? [album.images[album.images.length - 1]] : [],
+                    matchedType
+                });
+            }
+        }
+    };
+
+    // First fetch to get total pages and process first page
     const firstPage = await client.user.getTopAlbumsPaginated(username, {
         period: "12month",
         limit: 1000,
         page: 1
     });
 
-    let allListenedAlbums: LastfmUserTopAlbum[] = [...firstPage.getPage(1)];
+    // Process page 1 immediately
+    processBatch([...firstPage.getPage(1)]);
 
-    // Safety limit: Max 3000 albums (3 pages) to prevent timeouts for heavy listeners
-    // 99.9% of users don't chart albums outside their top 3000
-    const MAX_PAGES = 3;
+    // Calculate remaining pages
     const totalPages = Math.min(firstPage.totalPages, MAX_PAGES);
 
     // Helper for safe fetching with retry
@@ -98,7 +122,7 @@ async function getAllListenedAlbums(username: string): Promise<LastfmUserTopAlbu
                 return fetchPageSafe(page, retries - 1);
             }
             console.error(`Failed to fetch page ${page} after retries:`, err);
-            return []; // Return empty array instead of failing entire request
+            return [];
         }
     };
 
@@ -108,51 +132,21 @@ async function getAllListenedAlbums(username: string): Promise<LastfmUserTopAlbu
             pagesToFetch.push(i);
         }
 
-        // Reduced BATCH_SIZE to 3 to be safer against rate limits
+        // Reduced parallel fetching to a smaller batch to conserve memory/connections
         const BATCH_SIZE = 3;
         for (let i = 0; i < pagesToFetch.length; i += BATCH_SIZE) {
             const batch = pagesToFetch.slice(i, i + BATCH_SIZE);
             const promises = batch.map(page => fetchPageSafe(page));
 
             const results = await Promise.all(promises);
+
+            // Process each page as it comes in
             results.forEach(pageAlbums => {
-                allListenedAlbums = allListenedAlbums.concat(pageAlbums);
+                processBatch(pageAlbums);
             });
 
             // Small delay between batches
             await new Promise(resolve => setTimeout(resolve, 200));
-        }
-    }
-    return allListenedAlbums;
-}
-
-/**
- * Get all albums from Last.fm that are also in the AOTY database(s)
- * Optimized to make minimal SQL queries regardless of the number of albums
- * Uses case-insensitive matching for album names and artists
- * @param username Last.fm username
- */
-async function getAlbumsData(username: string, includeEPs: boolean) {
-    const allListenedAlbums = await getAllListenedAlbums(username);
-
-    // Query both databases
-    const matchingAlbums = getMatchingAlbumsFromDB(allListenedAlbums, ALBUMS_DB_PATH);
-    const matchingEPs = includeEPs ? getMatchingAlbumsFromDB(allListenedAlbums, EPS_DB_PATH) : new Set<string>();
-
-    const result: any[] = [];
-
-    for (const album of allListenedAlbums) {
-        const key = `${album.name.toLowerCase()}|${album.artist.name.toLowerCase()}`;
-        const matchedType = matchingAlbums.has(key) ? 'lp' : (matchingEPs.has(key) ? 'ep' : null);
-
-        if (matchedType) {
-            result.push({
-                name: album.name,
-                artist: { name: album.artist.name },
-                // Keep only the largest image to save bandwidth
-                images: album.images && album.images.length > 0 ? [album.images[album.images.length - 1]] : [],
-                matchedType
-            });
         }
     }
 
