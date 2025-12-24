@@ -30,14 +30,11 @@ function getDbInstance(path: string, type: 'albums' | 'ep'): Database.Database {
     if (type === 'albums') {
         if (!albumsDbInstance) {
             albumsDbInstance = new Database(path, { readonly: true });
-            // Optimize for read performance
-            albumsDbInstance.pragma('journal_mode = WAL');
         }
         return albumsDbInstance;
     } else {
         if (!epDbInstance) {
             epDbInstance = new Database(path, { readonly: true });
-            epDbInstance.pragma('journal_mode = WAL');
         }
         return epDbInstance;
     }
