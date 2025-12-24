@@ -139,23 +139,24 @@ async function getAlbumsData(username: string, includeEPs: boolean) {
     const matchingAlbums = getMatchingAlbumsFromDB(allListenedAlbums, ALBUMS_DB_PATH);
     const matchingEPs = includeEPs ? getMatchingAlbumsFromDB(allListenedAlbums, EPS_DB_PATH) : new Set<string>();
 
-    return allListenedAlbums
-        .map(album => {
-            const key = `${album.name.toLowerCase()}|${album.artist.name.toLowerCase()}`;
-            const matchedType = matchingAlbums.has(key) ? 'lp' : (matchingEPs.has(key) ? 'ep' : null);
+    const result: any[] = [];
 
-            if (!matchedType) return null;
+    for (const album of allListenedAlbums) {
+        const key = `${album.name.toLowerCase()}|${album.artist.name.toLowerCase()}`;
+        const matchedType = matchingAlbums.has(key) ? 'lp' : (matchingEPs.has(key) ? 'ep' : null);
 
-            // payload optimization: keep only necessary fields and largest image
-            return {
+        if (matchedType) {
+            result.push({
                 name: album.name,
                 artist: { name: album.artist.name },
                 // Keep only the largest image to save bandwidth
                 images: album.images && album.images.length > 0 ? [album.images[album.images.length - 1]] : [],
                 matchedType
-            };
-        })
-        .filter((album): album is LastfmUserTopAlbum & { matchedType: 'lp' | 'ep' } => album !== null);
+            });
+        }
+    }
+
+    return result;
 }
 
 export async function GET(request: NextRequest) {
