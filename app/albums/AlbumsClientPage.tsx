@@ -465,6 +465,7 @@ export default function AlbumsClientPage({ username, limit: initialLimit = 9, in
                                     index={0}
                                     coverOnly={true}
                                     id="overlay-item"
+                                    priority={true}
                                 />
                             </div>
                         ) : null}

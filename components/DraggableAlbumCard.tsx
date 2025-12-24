@@ -7,9 +7,10 @@ interface DraggableAlbumCardProps {
     index: number; // Keep index for rank visual, but not for ID
     coverOnly?: boolean;
     id: string; // Explicit ID required for dnd-kit
+    priority?: boolean;
 }
 
-export default function DraggableAlbumCard({ album, index, coverOnly = false, id }: DraggableAlbumCardProps) {
+export default function DraggableAlbumCard({ album, index, coverOnly = false, id, priority = false }: DraggableAlbumCardProps) {
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: id,
         data: { album, index, source: coverOnly ? 'grid' : 'list' } // Pass data for drag events
@@ -41,7 +42,7 @@ export default function DraggableAlbumCard({ album, index, coverOnly = false, id
                 // Cover Only Mode
                 <>
                     {imageUrl ? (
-                        <Image src={imageUrl} alt={album.name} fill className="object-cover" sizes="200px" />
+                        <Image src={imageUrl} alt={album.name} fill className="object-cover" sizes="200px" priority={priority} />
                     ) : (
                         <div className="flex items-center justify-center h-full text-xs">No Image</div>
                     )}
@@ -62,7 +63,7 @@ export default function DraggableAlbumCard({ album, index, coverOnly = false, id
                 <>
                     <div className="relative w-24 h-24 mb-2 overflow-hidden rounded-md pointer-events-none">
                         {imageUrl ? (
-                            <Image src={imageUrl} alt={album.name} fill className="object-cover" sizes="96px" />
+                            <Image src={imageUrl} alt={album.name} fill className="object-cover" sizes="96px" priority={priority} />
                         ) : (
                             <div className="w-full h-full bg-muted flex items-center justify-center text-muted-foreground text-xs">No Image</div>
                         )}
