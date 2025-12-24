@@ -22,51 +22,71 @@ interface AlbumRecord {
  * @param dbPath Path to the database file
  * @returns Set of album keys (lowercase album_name|artist) that exist in the database
  */
-function getMatchingAlbumsFromDB(albums: LastfmUserTopAlbum[], dbPath: string): Set<string> {
+// Global database instances for reuse in serverless environment
+let albumsDbInstance: Database.Database | null = null;
+let epDbInstance: Database.Database | null = null;
+
+function getDbInstance(path: string, type: 'albums' | 'ep'): Database.Database {
+    if (type === 'albums') {
+        if (!albumsDbInstance) {
+            albumsDbInstance = new Database(path, { readonly: true });
+            // Optimize for read performance
+            albumsDbInstance.pragma('journal_mode = WAL');
+        }
+        return albumsDbInstance;
+    } else {
+        if (!epDbInstance) {
+            epDbInstance = new Database(path, { readonly: true });
+            epDbInstance.pragma('journal_mode = WAL');
+        }
+        return epDbInstance;
+    }
+}
+
+/**
+ * Check if albums are in a specific AOTY database using optimized artist-based lookup
+ * @param albums Array of albums to check
+ * @param dbPath Path to the database file
+ * @param type Type of database ('albums' or 'ep')
+ * @returns Set of album keys (lowercase album_name|artist) that exist in the database
+ */
+function getMatchingAlbumsFromDB(albums: LastfmUserTopAlbum[], dbPath: string, type: 'albums' | 'ep'): Set<string> {
     if (albums.length === 0) {
         return new Set<string>();
     }
 
-    const db = new Database(dbPath, { readonly: true });
+    const db = getDbInstance(dbPath, type);
     const matchingSet = new Set<string>();
 
-    try {
-        // Process albums in batches to avoid SQLite expression tree depth limit (1000)
-        // Using batch size of 500 to stay well under the limit (each album = 2 conditions)
-        const BATCH_SIZE = 500;
+    // Optimization: Instead of checking (artist=A AND album=B) OR ...
+    // We check: artist IN (A, B, C...)
+    // Then we filter the results in memory. This drastically simplifies the SQL query plan.
 
-        for (let i = 0; i < albums.length; i += BATCH_SIZE) {
-            const batch = albums.slice(i, i + BATCH_SIZE);
+    // Get unique artists to query
+    const artists = Array.from(new Set(albums.map(a => a.artist.name)));
+    const BATCH_SIZE = 100; // SQLite limit for host variables is usually high, but let's be safe and chunk artists
 
-            // Build case-insensitive query for this batch using LOWER()
-            const conditions = batch.map(() => '(LOWER(album_name) = LOWER(?) AND LOWER(artist) = LOWER(?))').join(' OR ');
+    for (let i = 0; i < artists.length; i += BATCH_SIZE) {
+        const batchArtists = artists.slice(i, i + BATCH_SIZE);
+        const placeholders = batchArtists.map(() => '?').join(',');
 
-            // Flatten the parameters array for this batch
-            const params: string[] = [];
-            batch.forEach(album => {
-                params.push(album.name, album.artist.name);
-            });
+        // Use LOWER match for artists
+        const query = `
+            SELECT album_name, artist 
+            FROM albums 
+            WHERE LOWER(artist) IN (${placeholders.replace(/\?/g, 'LOWER(?)')})
+        `;
 
-            // Query for this batch
-            const query = `
-        SELECT DISTINCT album_name, artist 
-        FROM albums 
-        WHERE ${conditions}
-      `;
+        const stmt = db.prepare(query);
+        const results = stmt.all(...batchArtists) as AlbumRecord[];
 
-            const stmt = db.prepare(query);
-            const results = stmt.all(...params) as AlbumRecord[];
-
-            // Add results to the set using lowercase keys for case-insensitive matching
-            results.forEach(row => {
-                matchingSet.add(`${row.album_name.toLowerCase()}|${row.artist.toLowerCase()}`);
-            });
-        }
-
-        return matchingSet;
-    } finally {
-        db.close();
+        // Store all found albums by these artists in the set
+        results.forEach(row => {
+            matchingSet.add(`${row.album_name.toLowerCase()}|${row.artist.toLowerCase()}`);
+        });
     }
+
+    return matchingSet;
 }
 
 async function getAlbumsData(username: string, includeEPs: boolean) {
@@ -78,8 +98,8 @@ async function getAlbumsData(username: string, includeEPs: boolean) {
     const processBatch = (albums: LastfmUserTopAlbum[]) => {
         if (albums.length === 0) return;
 
-        const matchingAlbums = getMatchingAlbumsFromDB(albums, ALBUMS_DB_PATH);
-        const matchingEPs = includeEPs ? getMatchingAlbumsFromDB(albums, EPS_DB_PATH) : new Set<string>();
+        const matchingAlbums = getMatchingAlbumsFromDB(albums, ALBUMS_DB_PATH, 'albums');
+        const matchingEPs = includeEPs ? getMatchingAlbumsFromDB(albums, EPS_DB_PATH, 'ep') : new Set<string>();
 
         for (const album of albums) {
             const key = `${album.name.toLowerCase()}|${album.artist.name.toLowerCase()}`;
@@ -145,8 +165,7 @@ async function getAlbumsData(username: string, includeEPs: boolean) {
                 processBatch(pageAlbums);
             });
 
-            // Small delay between batches
-            await new Promise(resolve => setTimeout(resolve, 200));
+
         }
     }
 
