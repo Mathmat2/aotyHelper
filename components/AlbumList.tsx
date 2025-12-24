@@ -8,9 +8,12 @@ import { Input } from "./ui/input";
 
 interface AlbumListProps {
     albums: LastfmUserTopAlbum[];
+    width?: number;
+    mobileHeight?: string; // e.g. "40vh"
+    isDesktop?: boolean;
 }
 
-export default function AlbumList({ albums }: AlbumListProps) {
+export default function AlbumList({ albums, width = 300, mobileHeight = "40vh", isDesktop = true }: AlbumListProps) {
     const { setNodeRef } = useDroppable({
         id: 'album-list'
     });
@@ -45,7 +48,13 @@ export default function AlbumList({ albums }: AlbumListProps) {
     const visibleAlbums = filteredAlbums.slice(0, visibleCount);
 
     return (
-        <div className="w-full md:w-[300px] h-[40vh] md:h-full border-t md:border-t-0 md:border-l border-border flex flex-col bg-background">
+        <div
+            className="w-full md:h-full border-t md:border-t-0 md:border-l border-border flex flex-col bg-background flex-shrink-0 transition-opacity duration-0 ease-linear"
+            style={{
+                width: isDesktop ? width : '100%',
+                height: isDesktop ? '100%' : mobileHeight
+            }}
+        >
             <div className="p-4 border-b border-border space-y-4">
                 <div className="flex items-center justify-between">
                     <div>

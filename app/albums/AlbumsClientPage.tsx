@@ -57,6 +57,102 @@ export default function AlbumsClientPage({ username, limit: initialLimit = 9, in
     const [availableAlbums, setAvailableAlbums] = useState<ExtendedAlbum[]>([]);
     const [activeAlbum, setActiveAlbum] = useState<ExtendedAlbum | null>(null);
 
+    // Sidebar Resize State (Desktop)
+    const [sidebarWidth, setSidebarWidth] = useState(300);
+    const isResizingRef = useRef(false);
+
+    // Bottom Sheet Resize State (Mobile)
+    const [mobileListHeight, setMobileListHeight] = useState(40); // vh
+    const isMobileResizingRef = useRef(false);
+
+    // Layout Mode State for Reset Logic
+    const [isDesktop, setIsDesktop] = useState(true);
+
+    useEffect(() => {
+        const handleResize = () => {
+            const desktop = window.innerWidth >= 768;
+            setIsDesktop(prev => {
+                if (prev !== desktop) return desktop;
+                return prev;
+            });
+        };
+
+        // Initial check
+        handleResize();
+
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    // Reset layout dimensions when switching modes
+    useEffect(() => {
+        if (isDesktop) {
+            setSidebarWidth(300);
+        } else {
+            setMobileListHeight(40);
+        }
+    }, [isDesktop]);
+
+    const startResizing = useCallback(() => {
+        isResizingRef.current = true;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        // Prevent touch scrolling on body while resizing
+        document.body.style.touchAction = 'none';
+    }, []);
+
+    const startMobileResizing = useCallback(() => {
+        isMobileResizingRef.current = true;
+        document.body.style.cursor = 'row-resize';
+        document.body.style.userSelect = 'none';
+        document.body.style.touchAction = 'none';
+    }, []);
+
+    const stopResizing = useCallback(() => {
+        isResizingRef.current = false;
+        isMobileResizingRef.current = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        document.body.style.touchAction = '';
+    }, []);
+
+    const resize = useCallback((e: MouseEvent | TouchEvent) => {
+        // Desktop Resize
+        if (isResizingRef.current) {
+            const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+            const newWidth = window.innerWidth - clientX;
+            if (newWidth > 200 && newWidth < 800) {
+                setSidebarWidth(newWidth);
+            }
+        }
+
+        // Mobile Resize
+        if (isMobileResizingRef.current) {
+            const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+            // Calculate height from bottom
+            const newHeightPixel = window.innerHeight - clientY;
+            // Convert to vh
+            const newHeightVh = (newHeightPixel / window.innerHeight) * 100;
+
+            if (newHeightVh > 20 && newHeightVh < 80) {
+                setMobileListHeight(newHeightVh);
+            }
+        }
+    }, []);
+
+    useEffect(() => {
+        window.addEventListener('mousemove', resize);
+        window.addEventListener('mouseup', stopResizing);
+        window.addEventListener('touchmove', resize);
+        window.addEventListener('touchend', stopResizing);
+        return () => {
+            window.removeEventListener('mousemove', resize);
+            window.removeEventListener('mouseup', stopResizing);
+            window.removeEventListener('touchmove', resize);
+            window.removeEventListener('touchend', stopResizing);
+        };
+    }, [resize, stopResizing]);
+
     // Filter available albums based on current toggle state
     useEffect(() => {
         if (includeEPs) {
@@ -454,8 +550,25 @@ export default function AlbumsClientPage({ username, limit: initialLimit = 9, in
                         </div>
                     </div>
 
+                    {/* Resize Handle (Desktop) */}
+                    <div
+                        className="hidden md:flex w-1 h-full cursor-col-resize hover:bg-primary/50 active:bg-primary transition-colors flex-col justify-center items-center group touch-none"
+                        onMouseDown={startResizing}
+                    >
+                        <div className="h-8 w-1 bg-border group-hover:bg-primary rounded-full transition-colors" />
+                    </div>
+
+                    {/* Resize Handle (Mobile) */}
+                    <div
+                        className="flex md:hidden w-full h-6 cursor-row-resize hover:bg-primary/50 active:bg-primary transition-colors flex-row justify-center items-center group touch-none z-10 -mb-2 relative"
+                        onMouseDown={startMobileResizing}
+                        onTouchStart={startMobileResizing}
+                    >
+                        <div className="w-12 h-1.5 bg-border group-hover:bg-primary rounded-full transition-colors" />
+                    </div>
+
                     {/* Right Side: Scrollable List (Filtered) */}
-                    <AlbumList albums={filteredAvailableAlbums} />
+                    <AlbumList albums={filteredAvailableAlbums} width={sidebarWidth} mobileHeight={`${mobileListHeight}vh`} isDesktop={isDesktop} />
 
                     <DragOverlay zIndex={9999} dropAnimation={null} modifiers={[snapCenterToCursor]}>
                         {activeAlbum ? (
