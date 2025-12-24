@@ -6,6 +6,7 @@ import { LastfmUserTopAlbum } from "@musicorum/lastfm/dist/types/packages/user";
 type ExtendedAlbum = LastfmUserTopAlbum & { matchedType?: 'lp' | 'ep' };
 import TopsterGrid from "@/components/TopsterGrid";
 import AlbumList from "@/components/AlbumList";
+import LoadingAnimation from "@/components/loading-animation";
 import {
     DndContext,
     DragOverlay,
@@ -483,12 +484,7 @@ export default function AlbumsClientPage({ username, limit: initialLimit = 9, in
     return (
         <div className="flex flex-col md:flex-row h-screen overflow-hidden">
             {loading && (
-                <div className="flex-1 flex items-center justify-center">
-                    <div className="text-center">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-                        <p className="text-muted-foreground">Loading albums...</p>
-                    </div>
-                </div>
+                <LoadingAnimation />
             )}
 
             {error && (
