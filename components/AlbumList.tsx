@@ -74,7 +74,7 @@ export default function AlbumList({ albums, width = 300, mobileHeight = "40vh", 
             </div>
             <div
                 ref={setNodeRef}
-                className="flex-1 overflow-y-auto p-4 space-y-2"
+                className="flex-1 overflow-y-auto p-4 grid grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-2"
                 onScroll={handleScroll}
             >
                 {visibleAlbums.map((album, index) => (
