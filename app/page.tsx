@@ -23,6 +23,7 @@ import {
   FormDescription,
 } from "@/components/ui/form"
 import { useRouter } from 'next/navigation'
+import { useEffect, useState } from "react"
 import Image from "next/image"
 import { ModeToggle } from "@/components/mode-toggle"
 
@@ -32,16 +33,27 @@ const FormSchema = z.object({
   }),
   limit: z.string(),
   includeEPs: z.boolean(),
+  year: z.string(),
 })
 
 export default function Home() {
   const router = useRouter()
+  const [availableYears, setAvailableYears] = useState<string[]>([])
+
+  useEffect(() => {
+    fetch('/api/years')
+      .then(res => res.json())
+      .then(data => setAvailableYears(data.years || []))
+      .catch(err => console.error('Failed to fetch years:', err))
+  }, [])
+
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
       username: "",
       limit: "9",
       includeEPs: false,
+      year: "all",
     },
   })
 
@@ -53,6 +65,10 @@ export default function Home() {
 
     if (data.includeEPs) {
       params.append('includeEPs', 'true');
+    }
+
+    if (data.year && data.year !== 'all') {
+      params.append('year', data.year);
     }
 
     router.push(`/albums?${params.toString()}`);
@@ -113,6 +129,30 @@ export default function Home() {
                       <SelectItem value="42">Topster (42)</SelectItem>
                       <SelectItem value="49">7x7 (49)</SelectItem>
                       <SelectItem value="100">10x10 (100)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="year"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Release Year</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select year" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="all">All Years</SelectItem>
+                      {availableYears.map(year => (
+                        <SelectItem key={year} value={year}>{year}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <FormMessage />

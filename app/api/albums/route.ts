@@ -47,7 +47,7 @@ function getDbInstance(path: string, type: 'albums' | 'ep'): Database.Database {
  * @param type Type of database ('albums' or 'ep')
  * @returns Set of album keys (lowercase album_name|artist) that exist in the database
  */
-function getMatchingAlbumsFromDB(albums: LastfmUserTopAlbum[], dbPath: string, type: 'albums' | 'ep'): Set<string> {
+function getMatchingAlbumsFromDB(albums: LastfmUserTopAlbum[], dbPath: string, type: 'albums' | 'ep', year: string | null): Set<string> {
     if (albums.length === 0) {
         return new Set<string>();
     }
@@ -68,14 +68,20 @@ function getMatchingAlbumsFromDB(albums: LastfmUserTopAlbum[], dbPath: string, t
         const placeholders = batchArtists.map(() => '?').join(',');
 
         // Use LOWER match for artists
-        const query = `
-            SELECT album_name, artist 
-            FROM albums 
+        let query = `
+            SELECT album_name, artist
+            FROM albums
             WHERE LOWER(artist) IN (${placeholders.replace(/\?/g, 'LOWER(?)')})
         `;
 
+        const params: (string)[] = [...batchArtists];
+        if (year) {
+            query += ` AND release_date LIKE ?`;
+            params.push(`${year}-%`);
+        }
+
         const stmt = db.prepare(query);
-        const results = stmt.all(...batchArtists) as AlbumRecord[];
+        const results = stmt.all(...params) as AlbumRecord[];
 
         // Store all found albums by these artists in the set
         results.forEach(row => {
@@ -86,7 +92,7 @@ function getMatchingAlbumsFromDB(albums: LastfmUserTopAlbum[], dbPath: string, t
     return matchingSet;
 }
 
-async function getAlbumsData(username: string, includeEPs: boolean) {
+async function getAlbumsData(username: string, includeEPs: boolean, year: string | null) {
     const client = new LastClient(api_key);
     const result: any[] = [];
     const MAX_PAGES = 3;
@@ -95,8 +101,8 @@ async function getAlbumsData(username: string, includeEPs: boolean) {
     const processBatch = (albums: LastfmUserTopAlbum[]) => {
         if (albums.length === 0) return;
 
-        const matchingAlbums = getMatchingAlbumsFromDB(albums, ALBUMS_DB_PATH, 'albums');
-        const matchingEPs = includeEPs ? getMatchingAlbumsFromDB(albums, EPS_DB_PATH, 'ep') : new Set<string>();
+        const matchingAlbums = getMatchingAlbumsFromDB(albums, ALBUMS_DB_PATH, 'albums', year);
+        const matchingEPs = includeEPs ? getMatchingAlbumsFromDB(albums, EPS_DB_PATH, 'ep', year) : new Set<string>();
 
         for (const album of albums) {
             const key = `${album.name.toLowerCase()}|${album.artist.name.toLowerCase()}`;
@@ -182,8 +188,9 @@ export async function GET(request: NextRequest) {
         }
 
         const includeEPs = searchParams.get('includeEPs') === 'true';
+        const year = searchParams.get('year');
 
-        const albums = await getAlbumsData(username, includeEPs);
+        const albums = await getAlbumsData(username, includeEPs, year);
 
         return NextResponse.json({ albums }, { status: 200 });
     } catch (error) {

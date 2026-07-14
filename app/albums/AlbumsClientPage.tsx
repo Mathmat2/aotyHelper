@@ -36,9 +36,10 @@ interface AlbumsClientPageProps {
     username: string;
     limit?: number;
     includeEPs?: boolean;
+    year?: string;
 }
 
-export default function AlbumsClientPage({ username, limit: initialLimit = 9, includeEPs: initialIncludeEPs = false }: AlbumsClientPageProps) {
+export default function AlbumsClientPage({ username, limit: initialLimit = 9, includeEPs: initialIncludeEPs = false, year: initialYear = "all" }: AlbumsClientPageProps) {
     // Data fetching state
     const [cachedAlbums, setCachedAlbums] = useState<ExtendedAlbum[]>([]);
     const [loading, setLoading] = useState(true);
@@ -46,6 +47,18 @@ export default function AlbumsClientPage({ username, limit: initialLimit = 9, in
     const [includeEPs, setIncludeEPs] = useState(initialIncludeEPs);
     const [hasLoadedEPs, setHasLoadedEPs] = useState(initialIncludeEPs);
     const fetchingRef = useRef(false);
+
+    // Year filter state
+    const [selectedYear, setSelectedYear] = useState<string>(initialYear);
+    const [availableYears, setAvailableYears] = useState<string[]>([]);
+
+    // Fetch the list of years present in the DB to populate the selector
+    useEffect(() => {
+        fetch('/api/years')
+            .then(res => res.json())
+            .then(data => setAvailableYears(data.years || []))
+            .catch(err => console.error('Failed to fetch years:', err));
+    }, []);
 
     // Grid state
     const [gridSize, setGridSize] = useState<number>(initialLimit);
@@ -179,6 +192,11 @@ export default function AlbumsClientPage({ username, limit: initialLimit = 9, in
             // Only request EPs if explicitly asked
             params.append('includeEPs', loadEPs.toString());
 
+            // Filter results to a single release year unless "All Years" is selected
+            if (selectedYear && selectedYear !== 'all') {
+                params.append('year', selectedYear);
+            }
+
             const response = await fetch(`/api/albums?${params.toString()}`);
 
             if (!response.ok) {
@@ -190,26 +208,34 @@ export default function AlbumsClientPage({ username, limit: initialLimit = 9, in
             setCachedAlbums(data.albums);
             if (loadEPs) setHasLoadedEPs(true);
 
+            // Remove any grid album that isn't part of the freshly fetched list
+            // (e.g. it belonged to a different year that's no longer selected)
+            setGridAlbums(prevGrid =>
+                prevGrid.map(album => {
+                    if (!album) return null;
+                    const stillValid = (data.albums as ExtendedAlbum[]).some(
+                        (a) => a.name === album.name && a.artist.name === album.artist.name
+                    );
+                    return stillValid ? album : null;
+                })
+            );
+
         } catch (err) {
             setError(err instanceof Error ? err.message : 'An error occurred');
         } finally {
             setLoading(false);
             fetchingRef.current = false;
         }
-    }, [username]);
+    }, [username, selectedYear]);
 
-    // Initial fetch on username change
+    // Initial fetch on username or year change
     useEffect(() => {
-        // Reset state on new username
-        setHasLoadedEPs(initialIncludeEPs);
+        // Reset state on new username/year
+        setHasLoadedEPs(includeEPs);
         setCachedAlbums([]);
-        // Fetch based on initial preference (likely false)
-        // If initialIncludeEPs is true, we fetch true.
-        // We use the initial prop here to decide the first fetch?
-        // Or current state? Current state is initialized to prop.
         fetchAlbums(includeEPs);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [username, fetchAlbums]); // Intentionally exclude includeEPs to avoid re-fetch on simple toggle
+    }, [username, selectedYear, fetchAlbums]); // Intentionally exclude includeEPs to avoid re-fetch on simple toggle
 
     // Handle Toggle ON to lazy load
     useEffect(() => {
@@ -527,6 +553,24 @@ export default function AlbumsClientPage({ username, limit: initialLimit = 9, in
                                         <SelectItem value="100">10x10 (100)</SelectItem>
                                     </SelectContent>
                                 </Select>
+
+                                <div className="flex items-center space-x-2 border-l pl-4 border-border/50">
+                                    <span className="text-sm font-medium">Year:</span>
+                                    <Select
+                                        value={selectedYear}
+                                        onValueChange={setSelectedYear}
+                                    >
+                                        <SelectTrigger className="w-[110px]">
+                                            <SelectValue placeholder="Year" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Years</SelectItem>
+                                            {availableYears.map(year => (
+                                                <SelectItem key={year} value={year}>{year}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
 
                                 <div className="flex items-center space-x-2 border-l pl-4 border-border/50">
                                     <Switch

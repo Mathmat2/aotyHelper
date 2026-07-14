@@ -8,8 +8,9 @@ export default function AlbumsPage() {
   const username = searchParams.get('username') || '';
   const limit = Number(searchParams.get('limit')) || 9;
   const includeEPs = searchParams.get('includeEPs') === 'true';
+  const year = searchParams.get('year') || 'all';
 
   return (
-    <AlbumsClientPage username={username} limit={limit} includeEPs={includeEPs} />
+    <AlbumsClientPage username={username} limit={limit} includeEPs={includeEPs} year={year} />
   );
 }

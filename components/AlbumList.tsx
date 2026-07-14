@@ -30,14 +30,6 @@ export default function AlbumList({ albums, width = 300, mobileHeight = "40vh", 
         );
     });
 
-    // Reset visible count when search query changes
-    if (searchQuery && visibleCount !== 50 && filteredAlbums.length <= 50) {
-        // logic handled in effect or simply let it be dynamic
-    }
-
-    // Better: use effect to reset when search changes
-    // But direct render logic is fine if we slice.
-
     const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
         const { scrollTop, clientHeight, scrollHeight } = e.currentTarget;
         if (scrollHeight - scrollTop <= clientHeight * 1.5) {
