@@ -122,7 +122,7 @@ async function getAlbumsData(username: string, includeEPs: boolean, year: string
 
     // First fetch to get total pages and process first page
     const firstPage = await client.user.getTopAlbumsPaginated(username, {
-        period: "12month",
+        period: "overall",
         limit: 1000,
         page: 1
     });
