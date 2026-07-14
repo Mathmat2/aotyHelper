@@ -29,6 +29,7 @@
     "react-dom": "^19.2.2",
     "react-hook-form": "^7.62.0",
     "tailwind-merge": "^3.3.1",
+    "tslib": "^2.8.1",
     "zod": "^4.1.0"
   },
   "devDependencies": {
