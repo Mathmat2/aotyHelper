@@ -94,10 +94,8 @@ def resolve_years(args, current_year):
         start = args.start_year or current_year
         end = args.end_year or current_year
         years = list(range(start, end + 1))
-    elif args.years:
-        years = args.years
     else:
-        years = [current_year]
+        years = args.years
 
     valid_years = []
     for year in years:
@@ -113,7 +111,7 @@ def run(release_type, db_path, description):
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument(
         "years", nargs="*", type=int,
-        help="One or more specific years to scrape (default: current year)",
+        help="One or more specific years to scrape (required, unless --start-year/--end-year is given)",
     )
     parser.add_argument("--start-year", type=int, help="Start of a year range (inclusive)")
     parser.add_argument("--end-year", type=int, help="End of a year range (inclusive)")
@@ -126,6 +124,12 @@ def run(release_type, db_path, description):
         help="Resume scraping from this page of --start-month (requires --start-month)",
     )
     args = parser.parse_args()
+
+    if not args.years and not args.start_year and not args.end_year:
+        parser.error(
+            "no year(s) specified: pass one or more years, or --start-year/--end-year "
+            "(run with -h for usage)"
+        )
 
     if args.start_page != 1 and not args.start_month:
         parser.error("--start-page requires --start-month")
